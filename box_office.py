@@ -4,6 +4,12 @@ import bs4
 import requests
 import os
 
+import seaborn as sns
+import plotly.express as px
+import plotly.io as pio
+
+# pio.templates
+
 
 class SalesRetriever:
     """_summary_"""
@@ -288,14 +294,14 @@ boxoffice.daily_sales("Barbie")
 boxoffice._data_cache
 tot = len(boxoffice.movies)
 for idx, movie in enumerate(boxoffice.movies):
-    if idx / tot > 0.25:
-        print("25% done")
-    elif idx / tot > 0.50:
-        print("50% done")
-    elif idx / tot > 0.75:
-        print("75% done")
-    else:
+    if idx / tot < 0.25:
         pass
+    elif idx / tot < 0.50:
+        print("25% done")
+    elif idx / tot < 0.75:
+        print("50% done")
+    else:
+        print("75% done")
 
     print(f"Movie: {movie}", end=" ")
 
@@ -307,4 +313,132 @@ for idx, movie in enumerate(boxoffice.movies):
 
 # %%
 len(boxoffice.movies)
+# %%
+boxoffice
+# %%
+dfs = []
+
+for movie, df in boxoffice._data_cache.items():
+    dfs.append(df.assign(movie_title=movie))
+
+df = pd.concat(dfs)
+# %%
+
+
+# %%
+
+sns.kdeplot(df.query("movie_title == 'Oppenheimer'")["Daily"], color="black")
+sns.kdeplot(df.query("movie_title == 'Barbie'")["Daily"], color="pink")
+# %%
+len(df.query("movie_title == 'Barbie'")["Daily"]), len(
+    df.query("movie_title == 'Oppenheimer'")["Daily"]
+),
+# %%
+
+
+fig_dow = px.violin(
+    d, x="DOW", y="Daily", facet_row="movie_title", title="By Day of Week"
+)
+# fig_dow.update_yaxes(lambda x:x.update(x.text=x.))
+fig_dow
+
+# %%
+df.columns
+# %%
+d = df.query("movie_title in ['Oppenheimer', 'Barbie']")
+
+fig1 = px.bar(
+    d.groupby("movie_title")["Daily"].sum().reset_index(),
+    x="movie_title",
+    y="Daily",
+    color="movie_title",
+    color_discrete_map={"Oppenheimer": "red", "Barbie": "#E0218A"},
+    template="plotly_dark",
+)
+fig1.update_layout(title="Total US Gross Sales (USD)")
+fig1
+# %%
+fig2 = px.line(
+    d,
+    x="Date",
+    y="Daily",
+    color="movie_title",
+    color_discrete_map={"Oppenheimer": "red", "Barbie": "#E0218A"},
+    template="plotly_dark",
+)
+fig2.update_layout(yaxis={"title": "Daily US Gross Sales (USD)"})
+fig2
+# %%
+# Prepare data
+df_2023 = df[df.Date.dt.year == 2023]
+top7_titles = (
+    df_2023.groupby("movie_title")["Daily"]
+    .sum()
+    .sort_values(ascending=False)
+    .iloc[:7]
+    .index
+)
+top7_titles = df_2023[df_2023.movie_title.isin(top7_titles)]
+other_titles = (
+    df_2023.groupby("movie_title")["Daily"]
+    .sum()
+    .sort_values(ascending=False)
+    .iloc[7:]
+    .index
+)
+other_titles = (
+    df_2023[df_2023.movie_title.isin(other_titles)]
+    .groupby("Date")["Daily"]
+    .sum()
+    .reset_index()
+    .assign(movie_title="Other")
+)
+d = pd.concat(
+    [
+        top7_titles[["Date", "Daily", "movie_title"]],
+        other_titles[["Date", "Daily", "movie_title"]],
+    ]
+)
+# plot_order = ["Other"] + list(
+#     top7_titles.groupby("movie_title")["Daily"].sum().sort_values().index
+# )
+# plot_order = {title: order for order, title in enumerate(plot_order)}
+# d.sort_values(by="movie_title", key=plot_order)  # key=lambda x:plot_order.get(x))
+
+# Plot top titles + area chart for rest.
+fig3 = px.area(
+    data_frame=d,
+    x="Date",
+    y="Daily",
+    color="movie_title",
+    color_discrete_map={"Oppenheimer": "red", "Barbie": "#E0218A"},
+    # color_discrete_sequence=plot_order
+)
+# remove outer edge line of area color
+fig3.for_each_trace(lambda trace: trace.update(fillcolor=trace.line.color))
+fig3.update_layout(
+    yaxis={"title": "US Gross Sales (USD)"},
+    width=800,
+    template="plotly_dark",
+)
+fig3
+# %%
+with open("plotly Barbie v Oppenheimer.html", "w") as f:
+    # bar chart (Barbie v Oppen)
+    f.write(fig1.to_html(full_html=False, include_plotlyjs="cdn"))
+    # line chart (Barbie v Oppen)
+    f.write(fig2.to_html(full_html=False, include_plotlyjs="cdn"))
+    # area plot
+    f.write(fig3.to_html(full_html=False, include_plotlyjs="cdn"))
+# %%
+# px.treemap(d.groupby("movie_title")["To Date"], values='To Date')
+
+# %%
+
+
+# %%
+plot_order = ["Other"] + list(
+    top7_titles.groupby("movie_title")["Daily"].sum().sort_values().index
+)
+plot_order = {title: order for order, title in enumerate(plot_order)}
 # %%
